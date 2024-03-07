@@ -23,16 +23,32 @@ def adjust_dataset_size(path, out_path, n_samples_per_class):
     small_data.to_json(out_path, orient='records', lines=True)
 
 
-def get_dataset(input_data, image_dir, processor, device):
-    """create datasets to be sent to the trainer"""
-    for d in input_data:
-        caption = d["product_title"]
-        image_path = d["image_path"]
-        image = Image.open(image_dir+image_path)
-        inputs = processor(text=caption, images=image,return_tensors="pt", max_length=40, padding="max_length", truncation=True).to(device)
+class DataGenerator:
+    def __init__(self, data, data_dir):
+        self.data = data
+        self.data_dir = data_dir
 
-        data = {"pixel_values": inputs["pixel_values"].squeeze(),
-        "input_ids": inputs["input_ids"].squeeze(),
-        "attention_mask": inputs["attention_mask"].squeeze()}
-    
-        yield data
+    def make_batchs(self,batch_size):
+        # prepare data for training with LoRA
+        N = len(self.data)
+        bstart = 0
+        while bstart < N :
+            b_data = self.data[bstart:bstart+batch_size]
+            txt = [d["product_title"] for d in b_data]
+            img = [Image.open(self.data_dir+d["image_path"]) for d in b_data]
+            yield (txt,img)
+            bstart += batch_size
+
+    def get_dataset(self, processor, device):
+        # prepare data for trainer
+        for d in self.data:
+            caption = d["product_title"]
+            image_path = d["image_path"]
+            image = Image.open(self.data_dir+image_path)
+            inputs = processor(text=caption, images=image,return_tensors="pt", max_length=40, padding="max_length", truncation=True).to(device)
+
+            data = {"pixel_values": inputs["pixel_values"].squeeze(),
+            "input_ids": inputs["input_ids"].squeeze(),
+            "attention_mask": inputs["attention_mask"].squeeze()}
+        
+            yield data
